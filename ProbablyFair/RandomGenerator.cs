@@ -7,10 +7,11 @@ using System.Threading.Tasks;
 
 namespace ProbablyFair
 {
+    [Serializable]
     public class RandomGenerator
     {
         public byte[] Seed { get; set; }
-        public byte[] IV { get; set; }
+        private ulong Counter { get; set; }
 
         public int InputBlockSize
         {
@@ -30,9 +31,10 @@ namespace ProbablyFair
 
         public ICryptoTransform Transform;
 
-        public RandomGenerator()
+        public RandomGenerator(byte[] seed, ICryptoTransform transform)
         {
-
+            Seed = seed;
+            Transform = transform;
         }
 
         public int GetInteger(int max)
@@ -55,7 +57,13 @@ namespace ProbablyFair
 
         public double GetDouble()
         {
-            return GetRawLong() / ulong.MaxValue; // tad hacky but eh
+            return (double)GetRawLong() / (double)ulong.MaxValue; // tad hacky but eh
+        }
+
+        private byte[] GetNextPlaintext()
+        {
+            // this makes ECB act like CTR mode
+            return new byte[InputBlockSize - 8].Concat(BitConverter.GetBytes(Counter++)).ToArray();
         }
 
         public byte[] Generate(int length)
@@ -68,7 +76,7 @@ namespace ProbablyFair
 
             for(int i = 0; i < blocks; i++)
             {
-                int read = Transform.TransformBlock(new byte[Transform.InputBlockSize], 0, Transform.InputBlockSize, output, i * OutputBlockSize);
+                int read = Transform.TransformBlock(GetNextPlaintext(), 0, Transform.InputBlockSize, output, i * OutputBlockSize);
 
                 if (read != OutputBlockSize)
                     throw new Exception(string.Format("Unexpected short read(expected {0} bytes, read {1}) from ICryptoTransform", read, OutputBlockSize));
