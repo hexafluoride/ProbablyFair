@@ -123,6 +123,8 @@ namespace ProbablyFair
 
             ulong counter = Counter;
             bool success = true;
+            ulong verified = 0;
+            ulong failed = 0;
 
             foreach (var entry in logs)
             {
@@ -132,12 +134,16 @@ namespace ProbablyFair
 
                 if (bytes.SequenceEqual(entry.RawResult))
                 {
+                    verified++;
+
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("verified");
                     Console.ForegroundColor = ConsoleColor.Gray;
                 }
                 else
                 {
+                    failed++;
+
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine("mismatch");
                     Console.ForegroundColor = ConsoleColor.Gray;
@@ -145,6 +151,8 @@ namespace ProbablyFair
                     success = false;
                 }
             }
+
+            Console.WriteLine("{0} record(s), {1} valid/{2} invalid", logs.Count, verified, failed);
 
             Counter = counter;
 
