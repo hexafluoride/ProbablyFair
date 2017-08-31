@@ -1,11 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.26228.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProbablyFair", "ProbablyFair\ProbablyFair.csproj", "{87222662-81ED-4F05-B386-E9DEEA784423}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Example", "Example\Example.csproj", "{0D214E77-8945-4D36-8EB3-5851DF5F05D2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auditor", "Auditor\Auditor.csproj", "{0D214E77-8945-4D36-8EB3-5851DF5F05D2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

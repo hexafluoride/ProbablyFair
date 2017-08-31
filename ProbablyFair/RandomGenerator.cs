@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,7 +14,19 @@ namespace ProbablyFair
     public class RandomGenerator
     {
         public byte[] Seed { get; set; }
-        private ulong Counter { get; set; }
+        private string CounterLock = string.Empty;
+        public ulong Counter { get; set; }
+
+        public List<LogEntry> Log { get; set; }
+
+        public string HashedName
+        {
+            get
+            {
+                SHA256CryptoServiceProvider sha = new SHA256CryptoServiceProvider();
+                return sha.ComputeHash(Seed).ToUsefulString();
+            }
+        }
 
         public int InputBlockSize
         {
@@ -29,35 +44,120 @@ namespace ProbablyFair
             }
         }
 
+        [NonSerialized]
         public ICryptoTransform Transform;
+
+        public RandomGenerator()
+        {
+
+        }
 
         public RandomGenerator(byte[] seed, ICryptoTransform transform)
         {
             Seed = seed;
-            Transform = transform;
+            Initialize();
+            Log = new List<LogEntry>();
         }
 
-        public int GetInteger(int max)
+        public void Initialize()
         {
-            return GetInteger(0, max);
+            AesCryptoServiceProvider aes = new AesCryptoServiceProvider();
+            aes.KeySize = 256;
+            aes.Mode = CipherMode.ECB;
+            aes.Key = Seed;
+
+            Transform = aes.CreateEncryptor();
         }
 
-        public int GetInteger(int min, int max)
+        public static RandomGenerator FromFile(string filename)
         {
-            return min + (int)(GetDouble() * (max - min));
+            if (!File.Exists(filename))
+                return null;
+
+            IFormatter formatter = new BinaryFormatter();
+
+            try
+            {
+                using (FileStream fs = new FileStream(filename, FileMode.Open))
+                {
+                    var gen = (RandomGenerator)formatter.Deserialize(fs);
+                    gen.Initialize();
+                    return gen;
+                }
+            }
+            catch
+            {
+                return null;
+            }
         }
 
-        public ulong GetRawLong()
+        public void Save(string filename)
         {
-            byte[] buf = Generate(8);
-            ulong num = BitConverter.ToUInt64(buf, 0);
+            lock(CounterLock)
+            {
+                try
+                {
+                    IFormatter formatter = new BinaryFormatter();
 
-            return num;
+                    using (FileStream fs = new FileStream(filename + ".tmp", FileMode.OpenOrCreate))
+                    {
+                        formatter.Serialize(fs, this);
+                    }
+
+                    if (File.Exists(filename))
+                        File.Delete(filename);
+
+                    File.Move(filename + ".tmp", filename);
+                }
+                catch
+                {
+                    throw;
+                }
+            }
         }
 
-        public double GetDouble()
+        public bool Audit(List<LogEntry> logs = null)
         {
-            return (double)GetRawLong() / (double)ulong.MaxValue; // tad hacky but eh
+            if (logs == null)
+                logs = Log;
+
+            ulong counter = Counter;
+
+            foreach (var entry in logs)
+            {
+                Console.Write(entry);
+                Counter = entry.Index;
+                var bytes = _Generate(8);
+
+                if (bytes.SequenceEqual(entry.RawResult))
+                {
+                    Console.WriteLine(": verified.");
+                }
+                else
+                {
+                    Console.WriteLine(": mismatch({0}).", bytes.ToShortString());
+                    return false;
+                }
+            }
+
+            Counter = counter;
+
+            return true;
+        }
+
+        public bool Audit(ulong[] nums)
+        {
+            List<LogEntry> relevant_log = new List<LogEntry>();
+
+            for(int i = 0; i < Log.Count; i++)
+            {
+                var entry = Log[i];
+
+                if (nums.Contains(entry.Index))
+                    relevant_log.Add(entry);
+            }
+
+            return Audit(relevant_log);
         }
 
         private byte[] GetNextPlaintext()
@@ -66,7 +166,122 @@ namespace ProbablyFair
             return new byte[InputBlockSize - 8].Concat(BitConverter.GetBytes(Counter++)).ToArray();
         }
 
-        public byte[] Generate(int length)
+        public int GetInteger(int max, out ulong index, string tag = "")
+        {
+            return GetInteger(0, max, out index, tag);
+        }
+
+        public int GetInteger(int min, int max, out ulong index, string tag = "")
+        {
+            lock (CounterLock)
+            {
+                index = Counter;
+                int result = _GetInteger(min, max, out byte[] raw);
+
+                LogEntry entry = new LogEntry()
+                {
+                    Tag = tag,
+                    Index = index,
+                    Result = result,
+                    RawResult = raw,
+                    Params = new int[] { min, max },
+                    Type = ResultType.Integer
+                };
+                Log.Add(entry);
+
+                return result;
+            }
+        }
+
+        public double GetDouble(out ulong index, string tag = "")
+        {
+            lock (CounterLock)
+            {
+                index = Counter;
+                double result = _GetDouble(out byte[] raw);
+
+                LogEntry entry = new LogEntry()
+                {
+                    Tag = tag,
+                    Index = index,
+                    Result = result,
+                    RawResult = raw,
+                    Type = ResultType.Double
+                };
+                Log.Add(entry);
+
+                return result;
+            }
+        }
+
+        public bool GetBoolean(double threshold, out ulong index, string tag = "")
+        {
+            lock (CounterLock)
+            {
+                index = Counter;
+                bool result = _GetDouble(out byte[] raw) < threshold;
+
+                LogEntry entry = new LogEntry()
+                {
+                    Tag = tag,
+                    Index = index,
+                    Result = result,
+                    RawResult = raw,
+                    Params = new double[] { threshold },
+                    Type = ResultType.Boolean
+                };
+                Log.Add(entry);
+
+                return result;
+            }
+        }
+
+        public ulong GetRawLong(string tag = "")
+        {
+            lock (CounterLock)
+            {
+                ulong i = Counter;
+                ulong result = _GetRawLong(out byte[] raw);
+
+                LogEntry entry = new LogEntry()
+                {
+                    Tag = tag,
+                    Index = i,
+                    Result = result,
+                    RawResult = raw,
+                    Type = ResultType.Double
+                };
+                Log.Add(entry);
+
+                return result;
+            }
+        }
+
+        private int _GetInteger(int max, out byte[] raw)
+        {
+            return _GetInteger(0, max, out raw);
+        }
+
+        private int _GetInteger(int min, int max, out byte[] raw)
+        {
+            return min + (int)(_GetDouble(out raw) * (max - min));
+        }
+
+        private ulong _GetRawLong(out byte[] raw)
+        {
+            byte[] buf = _Generate(8);
+            raw = buf;
+            ulong num = BitConverter.ToUInt64(buf, 0);
+
+            return num;
+        }
+
+        private double _GetDouble(out byte[] raw)
+        { 
+            return (double)_GetRawLong(out raw) / (double)ulong.MaxValue; // tad hacky but eh
+        }
+
+        private byte[] _Generate(int length)
         {
             if (length % OutputBlockSize != 0)
                 length += (length % OutputBlockSize);
