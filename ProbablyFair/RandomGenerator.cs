@@ -122,27 +122,33 @@ namespace ProbablyFair
                 logs = Log;
 
             ulong counter = Counter;
+            bool success = true;
 
             foreach (var entry in logs)
             {
-                Console.Write(entry);
+                Console.Write("{0}: ", entry);
                 Counter = entry.Index;
                 var bytes = _Generate(8);
 
                 if (bytes.SequenceEqual(entry.RawResult))
                 {
-                    Console.WriteLine(": verified.");
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("verified");
+                    Console.ForegroundColor = ConsoleColor.Gray;
                 }
                 else
                 {
-                    Console.WriteLine(": mismatch({0}).", bytes.ToShortString());
-                    return false;
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("mismatch");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    Console.WriteLine("({0})", bytes.ToShortString());
+                    success = false;
                 }
             }
 
             Counter = counter;
 
-            return true;
+            return success;
         }
 
         public bool Audit(ulong[] nums)
