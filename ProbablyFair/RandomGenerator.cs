@@ -116,64 +116,6 @@ namespace ProbablyFair
             }
         }
 
-        public bool Audit(List<LogEntry> logs = null)
-        {
-            if (logs == null)
-                logs = Log;
-
-            ulong counter = Counter;
-            bool success = true;
-            ulong verified = 0;
-            ulong failed = 0;
-
-            foreach (var entry in logs)
-            {
-                Console.Write("{0}: ", entry);
-                Counter = entry.Index;
-                var bytes = _Generate(8);
-
-                if (bytes.SequenceEqual(entry.RawResult))
-                {
-                    verified++;
-
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("verified");
-                    Console.ForegroundColor = ConsoleColor.Gray;
-                }
-                else
-                {
-                    failed++;
-
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("mismatch");
-                    Console.ForegroundColor = ConsoleColor.Gray;
-                    Console.WriteLine("({0})", bytes.ToShortString());
-                    success = false;
-                }
-            }
-
-            Console.WriteLine("{0} record(s), {1} valid/{2} invalid", logs.Count, verified, failed);
-
-            Counter = counter;
-
-            return success;
-        }
-
-        public bool Audit(ulong[] nums)
-        {
-            List<LogEntry> relevant_log = new List<LogEntry>();
-
-            for(int i = 0; i < Log.Count; i++)
-            {
-                var entry = Log[i];
-
-                if (nums.Contains(entry.Index))
-                    relevant_log.Add(entry);
-            }
-
-            return Audit(relevant_log);
-        }
-
         private byte[] GetNextPlaintext()
         {
             // this makes ECB act like CTR mode
@@ -269,6 +211,11 @@ namespace ProbablyFair
 
                 return result;
             }
+        }
+
+        public byte[] GetRawBytes(int length)
+        {
+            return _Generate(length);
         }
 
         private int _GetInteger(int max, out byte[] raw)

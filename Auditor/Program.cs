@@ -7,6 +7,7 @@ using System.IO;
 
 using ProbablyFair;
 using NDesk.Options;
+using System.Runtime.InteropServices;
 
 namespace Auditor
 {
@@ -41,9 +42,9 @@ namespace Auditor
             bool audit_result = false;
 
             if (check_all)
-                audit_result = gen.Audit();
+                audit_result = Audit(gen);
             else
-                audit_result = gen.Audit(checks);
+                audit_result = Audit(gen, checks);
 
             Console.WriteLine();
             Console.WriteLine("Generator hash: {0} (cross-reference with .fair)", gen.HashedName);
@@ -58,6 +59,64 @@ namespace Auditor
             Console.WriteLine("{0}", audit_result ? "success" : "failure");
 
             Console.ForegroundColor = ConsoleColor.Gray;
+        }
+
+        public static bool Audit(RandomGenerator gen, ulong[] nums)
+        {
+            List<LogEntry> relevant_log = new List<LogEntry>();
+
+            for (int i = 0; i < gen.Log.Count; i++)
+            {
+                var entry = gen.Log[i];
+
+                if (nums.Contains(entry.Index))
+                    relevant_log.Add(entry);
+            }
+
+            return Audit(gen, relevant_log);
+        }
+
+        public static bool Audit(RandomGenerator gen, List<LogEntry> logs = null)
+        {
+            if (logs == null)
+                logs = gen.Log;
+
+            ulong counter = gen.Counter;
+            bool success = true;
+            ulong verified = 0;
+            ulong failed = 0;
+
+            foreach (var entry in logs)
+            {
+                Console.Write("{0}: ", entry);
+                gen.Counter = entry.Index;
+                var bytes = gen.GetRawBytes(8);
+
+                if (bytes.SequenceEqual(entry.RawResult))
+                {
+                    verified++;
+
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("verified");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                }
+                else
+                {
+                    failed++;
+
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("mismatch");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    Console.WriteLine("({0})", bytes.ToShortString());
+                    success = false;
+                }
+            }
+
+            Console.WriteLine("{0} record(s), {1} valid/{2} invalid", logs.Count, verified, failed);
+
+            gen.Counter = counter;
+
+            return success;
         }
 
         static void ShowHelp(OptionSet set)
